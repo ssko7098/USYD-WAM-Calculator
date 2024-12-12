@@ -6,15 +6,13 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, 
     QFileDialog, QTableWidget, QTableWidgetItem, QLabel, QHBoxLayout
 )
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QFont
 
-
-pdf_path = "Academic Transcript.pdf"
 
 def calculate_weighting(unit_code, unit_name):
-    
     if "thesis" in unit_name.lower():
         return 8
-    
     first_digit = int(unit_code[4])
     if first_digit == 1:
         return 0
@@ -27,29 +25,23 @@ def calculate_weighting(unit_code, unit_name):
     else:
         return 0
 
+
 def extract_data(pdf_path):
     with pdfplumber.open(pdf_path) as pdf:
         extracted_data = []
-        
-        # Loop through each page
         for page in pdf.pages:
             text = page.extract_text()
-            
-            # Split text into lines
             lines = text.split("\n")
-            
-            # Parse the 'Unit of Study Results' section
             start_parsing = False
             for line in lines:
                 if "Year" in line:
                     start_parsing = True
                     continue
                 if start_parsing and "Credit points gained" in line:
-                    break  # Stop when the relevant section ends
+                    break
                 if start_parsing:
                     extracted_data.append(line)
 
-        # Process the extracted lines
         relevant_data = []
         for line in extracted_data:
             parts = line.split()
@@ -64,15 +56,48 @@ def extract_data(pdf_path):
                     "Credit Points": parts[-1],
                 })
 
-        # Convert to DataFrame
         return pd.DataFrame(relevant_data)
-    
+
 
 class WAMCalculatorApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Transcript WAM Calculator")
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 900, 600)
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #2E3440;
+            }
+            QLabel {
+                color: #D8DEE9;
+                font-size: 16px;
+            }
+            QPushButton {
+                background-color: #5E81AC;
+                color: #ECEFF4;
+                border: none;
+                border-radius: 5px;
+                padding: 10px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #81A1C1;
+            }
+            QTableWidget {
+                background-color: #3B4252;
+                color: #ECEFF4;
+                gridline-color: #4C566A;
+                font-size: 14px;
+                border: 1px solid #4C566A;
+            }
+            QHeaderView::section {
+                background-color: #5E81AC;
+                color: #ECEFF4;
+                font-size: 14px;
+                padding: 4px;
+                border: none;
+            }
+        """)
         self.init_ui()
 
     def init_ui(self):
@@ -89,10 +114,20 @@ class WAMCalculatorApp(QMainWindow):
         self.table.setHorizontalHeaderLabels([
             "Year", "Session", "Unit Code", "Unit Name", "Mark", "Grade", "Credit Points"
         ])
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.horizontalHeader().setDefaultSectionSize(150)
+        self.table.verticalHeader().setDefaultSectionSize(40)
+        self.table.setAlternatingRowColors(True)
 
         # Results display
-        self.wam_label = QLabel("WAM: ")
-        self.eihwam_label = QLabel("EIHWAM: ")
+        self.wam_label = QLabel("WAM: --")
+        self.wam_label.setFont(QFont("Arial", 18, QFont.Bold))
+        self.wam_label.setAlignment(Qt.AlignCenter)
+
+        self.eihwam_label = QLabel("EIHWAM: --")
+        self.eihwam_label.setFont(QFont("Arial", 18, QFont.Bold))
+        self.eihwam_label.setAlignment(Qt.AlignCenter)
+
         results_layout = QHBoxLayout()
         results_layout.addWidget(self.wam_label)
         results_layout.addWidget(self.eihwam_label)
@@ -121,7 +156,8 @@ class WAMCalculatorApp(QMainWindow):
             self.populate_table(df)
             self.calculate_wam(df)
         except Exception as e:
-            self.wam_label.setText("Error: Unable to process file")
+            self.wam_label.setText("Error")
+            self.eihwam_label.setText("Error")
             print(f"Error: {e}")
 
     def populate_table(self, df):
@@ -170,4 +206,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
