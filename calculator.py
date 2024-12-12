@@ -1,17 +1,21 @@
+import sys
 import pdfplumber
 import pandas as pd
 import numpy as np
-from tkinter import Tk
-from tkinter.filedialog import askopenfilename
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, 
+    QFileDialog, QTableWidget, QTableWidgetItem, QLabel, QHBoxLayout
+)
+
 
 pdf_path = "Academic Transcript.pdf"
 
 def calculate_weighting(unit_code, unit_name):
-    # Check if the unit is a thesis unit
+    
     if "thesis" in unit_name.lower():
         return 8
-    # Calculate weighting based on unit code
-    first_digit = int(unit_code[4])  # Extract the first digit after 'XXXX'
+    
+    first_digit = int(unit_code[4])
     if first_digit == 1:
         return 0
     elif first_digit == 2:
@@ -21,7 +25,7 @@ def calculate_weighting(unit_code, unit_name):
     elif first_digit >= 4:
         return 4
     else:
-        return 0  # Default case if needed
+        return 0
 
 def extract_data(pdf_path):
     with pdfplumber.open(pdf_path) as pdf:
@@ -49,39 +53,89 @@ def extract_data(pdf_path):
         relevant_data = []
         for line in extracted_data:
             parts = line.split()
-            if len(parts) > 5 and parts[-1].isdigit() and int(parts[-1]) > 0:  # Ensure the line contains enough elements to represent data
+            if len(parts) > 5 and parts[-1].isdigit() and int(parts[-1]) > 0:
                 relevant_data.append({
                     "Year": parts[0],
                     "Session": parts[1],
                     "Unit Code": parts[2],
-                    "Unit Name": " ".join(parts[3:-3]),  # Combine all parts of the unit name
+                    "Unit Name": " ".join(parts[3:-3]),
                     "Mark": parts[-3],
                     "Grade": parts[-2],
                     "Credit Points": parts[-1],
                 })
 
         # Convert to DataFrame
-        df = pd.DataFrame(relevant_data)
-
-    return df
-
-def main():
-    Tk().withdraw()
-    print("Please choose your transcript file.")
+        return pd.DataFrame(relevant_data)
     
-    
-    # Open file picker
-    file_path = askopenfilename(
-        title="Select Transcript File",
-        filetypes=[("PDF Files", "*.pdf")]
-    )
 
-    if not file_path:
-        print("No file selected. Exiting program.")
-        return
-    
-    try:
-        df = extract_data(file_path)
+class WAMCalculatorApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Transcript WAM Calculator")
+        self.setGeometry(100, 100, 800, 600)
+        self.init_ui()
+
+    def init_ui(self):
+        # Main layout
+        main_layout = QVBoxLayout()
+
+        # Buttons
+        self.load_button = QPushButton("Load Transcript")
+        self.load_button.clicked.connect(self.load_transcript)
+
+        # Table
+        self.table = QTableWidget()
+        self.table.setColumnCount(7)
+        self.table.setHorizontalHeaderLabels([
+            "Year", "Session", "Unit Code", "Unit Name", "Mark", "Grade", "Credit Points"
+        ])
+
+        # Results display
+        self.wam_label = QLabel("WAM: ")
+        self.eihwam_label = QLabel("EIHWAM: ")
+        results_layout = QHBoxLayout()
+        results_layout.addWidget(self.wam_label)
+        results_layout.addWidget(self.eihwam_label)
+
+        # Add widgets to layout
+        main_layout.addWidget(self.load_button)
+        main_layout.addWidget(self.table)
+        main_layout.addLayout(results_layout)
+
+        # Set main layout
+        container = QWidget()
+        container.setLayout(main_layout)
+        self.setCentralWidget(container)
+
+    def load_transcript(self):
+        # Open file picker
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select Transcript File", "", "PDF Files (*.pdf)"
+        )
+        if not file_path:
+            return
+
+        # Process the selected file
+        try:
+            df = extract_data(file_path)
+            self.populate_table(df)
+            self.calculate_wam(df)
+        except Exception as e:
+            self.wam_label.setText("Error: Unable to process file")
+            print(f"Error: {e}")
+
+    def populate_table(self, df):
+        self.table.setRowCount(len(df))
+        for i, row in df.iterrows():
+            self.table.setItem(i, 0, QTableWidgetItem(row['Year']))
+            self.table.setItem(i, 1, QTableWidgetItem(row['Session']))
+            self.table.setItem(i, 2, QTableWidgetItem(row['Unit Code']))
+            self.table.setItem(i, 3, QTableWidgetItem(row['Unit Name']))
+            self.table.setItem(i, 4, QTableWidgetItem(row['Mark']))
+            self.table.setItem(i, 5, QTableWidgetItem(row['Grade']))
+            self.table.setItem(i, 6, QTableWidgetItem(row['Credit Points']))
+
+    def calculate_wam(self, df):
         W = []
         CP = []
         M = []
@@ -100,14 +154,19 @@ def main():
         CP_vector = pd.Series(CP)
         M_vector = pd.Series(M)
 
-        WAM = round(CP_vector.dot(M_vector)/sum(CP), 1)
-        print(f"WAM: {WAM}")
+        wam = round(CP_vector.dot(M_vector) / sum(CP), 1)
+        eihwam = round(np.sum(W_vector * CP_vector * M_vector) / W_vector.dot(CP_vector), 1)
 
-        EIHWAM =  round(np.sum(W_vector * CP_vector * M_vector) / W_vector.dot(CP_vector), 1)
-        print(f"EIHWAM: {EIHWAM}")
+        self.wam_label.setText(f"WAM: {wam}")
+        self.eihwam_label.setText(f"EIHWAM: {eihwam}")
 
-    except Exception as e:
-        print(f"An error occurred: {e}")
+
+def main():
+    app = QApplication(sys.argv)
+    window = WAMCalculatorApp()
+    window.show()
+    sys.exit(app.exec_())
+
 
 if __name__ == "__main__":
     main()
